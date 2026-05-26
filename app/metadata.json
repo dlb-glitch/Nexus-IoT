@@ -1,0 +1,6 @@
+{
+  "name": "IoT Dashboard Vercel",
+  "description": "Dashboard IoT interaktif untuk monitoring sensor (Suhu, MQ-9, ZMPT101B) dan kendali perangkat.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

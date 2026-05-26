@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "DashboardConfig": {
+      "title": "Dashboard Config",
+      "description": "User's dashboard layout and widgets configuration",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user this config belongs to"
+        },
+        "layouts": {
+          "type": "object",
+          "description": "React-grid-layout configuration"
+        },
+        "widgets": {
+          "type": "array",
+          "description": "List of widgets on the dashboard"
+        },
+        "theme": {
+          "type": "object",
+          "description": "Theme configuration (dark/light, color palette)"
+        },
+        "updatedAt": {
+          "type": "object",
+          "description": "Timestamp of the last update"
+        }
+      },
+      "required": ["userId", "layouts", "widgets"]
+    },
+    "TelemetryData": {
+      "title": "Telemetry Data",
+      "description": "Historical IoT sensor telemetry data",
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "object",
+          "description": "When the telemetry was recorded"
+        },
+        "sensorKey": {
+          "type": "string",
+          "description": "Which sensor this belongs to (e.g. temperature)"
+        },
+        "value": {
+          "type": "number",
+          "description": "The recorded value"
+        },
+        "userId": {
+          "type": "string",
+          "description": "The user this dataset belongs to"
+        }
+      },
+      "required": ["timestamp", "sensorKey", "value", "userId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/dashboard_config/{configId}": {
+      "schema": {
+        "$ref": "#/entities/DashboardConfig"
+      },
+      "description": "User dashboard configuration (single document)"
+    },
+    "/users/{userId}/telemetry/{telemetryId}": {
+      "schema": {
+        "$ref": "#/entities/TelemetryData"
+      },
+      "description": "Historical telemetry entries for the user"
+    }
+  }
+}

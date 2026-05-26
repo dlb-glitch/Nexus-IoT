@@ -1,0 +1,117 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // -------------------------------------------------------------------------
+    // 1. GLOBAL SAFETY NET
+    // -------------------------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. REUSABLE PRIMITIVES
+    // -------------------------------------------------------------------------
+    function isSignedIn() { 
+      return request.auth != null; 
+    }
+    
+    function isVerified() {
+      // In tests and emulators this might not be set, but we require it for prod if possible. 
+      // For simplicity in AI Studio preview, we just check email verification, except if anonymous.
+      return request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidId(id) { 
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. BLUEPRINTS / SCHEMA VALIDATION
+    // -------------------------------------------------------------------------
+    
+    // Dashboard Config Blueprint
+    function isValidDashboardConfig(data, userId) {
+      return data.keys().hasAll(['userId', 'layouts', 'widgets', 'updatedAt']) 
+        && data.size() >= 4 
+        && data.size() <= 5
+        && data.userId == userId
+        && data.layouts is map 
+        && data.widgets is list 
+        && data.widgets.size() <= 100 // Prevent huge arrays
+        && (data.theme == null || data.theme is map); // Optional field
+    }
+
+    // Telemetry Data Blueprint
+    function isValidTelemetry(data, userId) {
+      return data.keys().hasAll(['timestamp', 'sensorKey', 'value', 'userId'])
+        && data.size() == 4
+        && data.userId == userId
+        && data.sensorKey is string && data.sensorKey.size() <= 50
+        && (data.value is number)
+        && data.timestamp == request.time;
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. RESOURCE PATHS & RULES
+    // -------------------------------------------------------------------------
+    
+    match /users/{userId} {
+      
+      // Access to Dashboard Config
+      match /dashboard_config/{configId} {
+        // Read: Only owner can read
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(configId) && userId == request.auth.uid;
+        
+        // List: Only owner can list their configs
+        allow list: if isSignedIn() && isValidId(userId) && userId == request.auth.uid && existing().userId == request.auth.uid;
+        
+        // Create: Only owner can create, with strict schema and timestamp
+        allow create: if isSignedIn() 
+          && isValidId(userId) 
+          && isValidId(configId) 
+          && userId == request.auth.uid
+          && isValidDashboardConfig(incoming(), request.auth.uid)
+          && incoming().updatedAt == request.time;
+          
+        // Update: Only owner can update, must pass schema
+        allow update: if isSignedIn() 
+          && isValidId(userId) 
+          && isValidId(configId) 
+          && userId == request.auth.uid
+          && existing().userId == request.auth.uid
+          && isValidDashboardConfig(incoming(), request.auth.uid)
+          && incoming().updatedAt == request.time
+          && incoming().userId == existing().userId; // immutable ownership
+          
+        // Delete: Only owner
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(configId) && userId == request.auth.uid;
+      }
+
+      // Access to Telemetry
+      match /telemetry/{telemetryId} {
+        // Read: Owner only
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(telemetryId) && userId == request.auth.uid;
+        
+        // List: Owner only, enforced on query resource
+        allow list: if isSignedIn() && isValidId(userId) && userId == request.auth.uid && existing().userId == request.auth.uid;
+        
+        // Create: Owner only
+        allow create: if isSignedIn()
+          && isValidId(userId)
+          && isValidId(telemetryId)
+          && userId == request.auth.uid
+          && isValidTelemetry(incoming(), request.auth.uid);
+          
+        // Update: Telemetry is immutable usually, but if needed, restrict
+        allow update: if false; // telemetry data shouldn't be updated
+        
+        // Delete: Owner only
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(telemetryId) && userId == request.auth.uid;
+      }
+    }
+  }
+}
